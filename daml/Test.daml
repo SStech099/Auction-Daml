@@ -1,0 +1,297 @@
+module Test where
+
+import Main
+import Setup
+
+import DA.List
+import DA.Date
+import Daml.Script
+
+
+{-
+    Happy paths
+    1. testCreateAuctionAcc - bidder creates a AuctionAcc contract
+    2. testVerifyAuctionAcc - auctioneer verifies the AuctionAcc contract
+    3. testDepositAuctionAcc - bidder deposits money to the AuctionAcc contract
+    4. testBidAuction - bidder bids on the AuctionAcc contract
+    5. testAuctionCloseOnReachingReservePrice - Auction closes when reserve price is reached
+    6. testCloseAuction - Auction closes when end time is reached
+    7. testGetBids - calls the non-consuming getBids choice
+    8. testGetLargeBids - script to get large bids GT 1500 and also print in sorted order of bid amount
+-}
+
+testCreateAuctionAcc : Script (TestParties, TestBidders, TestAuctionAccInfos, [ContractId AuctionAcc])
+testCreateAuctionAcc = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}) <- setupAuctionAccInfos
+    -- 1. bidder creates a AuctionAcc contract
+     
+    acc1 <- submit auctioneer do
+        createCmd AuctionAcc with
+            bidder = firstBidder
+            auctioneer 
+            bidderId = accInfo1.bidderId
+            bidderName = accInfo1.bidderName
+            bidderPhone = accInfo1.bidderPhone
+            isVerified = accInfo1.isVerified 
+            accBalance = accInfo1.accBalance
+            password = accInfo1.password 
+
+    acc2 <- submit auctioneer do
+        createCmd AuctionAcc with
+            bidder = secondBidder
+            auctioneer 
+            bidderId = accInfo2.bidderId
+            bidderName = accInfo2.bidderName
+            bidderPhone = accInfo2.bidderPhone
+            isVerified = accInfo2.isVerified 
+            accBalance = accInfo2.accBalance
+            password = accInfo2.password
+
+    acc3 <- submit auctioneer do
+        createCmd AuctionAcc with
+            bidder = thirdBidder
+            auctioneer 
+            bidderId = accInfo3.bidderId
+            bidderName = accInfo3.bidderName
+            bidderPhone = accInfo3.bidderPhone
+            isVerified = accInfo3.isVerified 
+            accBalance = accInfo3.accBalance
+            password = accInfo3.password
+
+    acc4 <- submit auctioneer do
+        createCmd AuctionAcc with
+            bidder = fourthBidder
+            auctioneer 
+            bidderId = accInfo4.bidderId
+            bidderName = accInfo4.bidderName
+            bidderPhone = accInfo4.bidderPhone
+            isVerified = accInfo4.isVerified 
+            accBalance = accInfo4.accBalance
+            password = accInfo4.password
+
+    let accs = [acc1, acc2, acc3, acc4]
+    return (testParties, testBidders, testAuctionAccInfos, accs)
+
+testVerifyAuctionAcc : Script (TestParties, TestBidders, TestAuctionAccInfos , [ContractId AuctionAcc])
+testVerifyAuctionAcc = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}, accs ) <- testCreateAuctionAcc
+    -- 2. auctioneer verifies the Auction contract
+    let acc1Cid = head accs
+    let acc2Cid = head (tail accs)
+    let acc3Cid = head (tail (tail accs))
+    let acc4Cid = head (tail (tail (tail accs)))
+
+    acc1Verified <- submit auctioneer do
+        exerciseCmd acc1Cid VerifyAcc with 
+            isVerified = True 
+
+    acc2Verified <- submit auctioneer do
+        exerciseCmd acc2Cid VerifyAcc with 
+            isVerified = True
+
+    acc3Verified <- submit auctioneer do
+        exerciseCmd acc3Cid VerifyAcc with 
+            isVerified = True
+
+    acc4Verified <- submit auctioneer do
+        exerciseCmd acc4Cid VerifyAcc with 
+            isVerified = True
+
+    let accsVerified = [acc1Verified, acc2Verified, acc3Verified, acc4Verified]
+
+    return (testParties, testBidders , testAuctionAccInfos, accsVerified)
+
+testDepositAuctionAcc : Script (TestParties, TestBidders, TestAuctionAccInfos , [ContractId AuctionAcc])
+testDepositAuctionAcc = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}, accsVerified) <- testVerifyAuctionAcc 
+
+    let
+        acc1VerifiedCid = head accsVerified
+        acc2VerifiedCid = head (tail accsVerified)
+        acc3VerifiedCid = head (tail (tail accsVerified))
+        acc4VerifiedCid = head (tail (tail (tail accsVerified)))
+
+    -- 3. bidder deposits money to the Auction contract
+    acc1VerifiedAndDeposited <- submit firstBidder do 
+        exerciseCmd acc1VerifiedCid Deposit with 
+            amount = 1000.0 
+
+    acc2VerifiedAndDeposited <- submit secondBidder do
+        exerciseCmd acc2VerifiedCid Deposit with 
+            amount = 2000.0
+
+    acc3VerifiedAndDeposited <- submit thirdBidder do
+        exerciseCmd acc3VerifiedCid Deposit with 
+            amount = 3000.0
+
+    acc4VerifiedAndDeposited <- submit fourthBidder do
+        exerciseCmd acc4VerifiedCid Deposit with 
+            amount = 5000.0
+
+    let accsVerifiedAndDeposited = [acc1VerifiedAndDeposited, acc2VerifiedAndDeposited, acc3VerifiedAndDeposited, acc4VerifiedAndDeposited]
+
+    return (testParties, testBidders , testAuctionAccInfos, accsVerifiedAndDeposited)
+
+testBidAuction : Script (TestParties, TestBidders, TestAuctionAccInfos , ContractId BidAuction )
+testBidAuction = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}, accsVerifiedAndDeposited) <- testDepositAuctionAcc
+
+    let
+        acc1VerifiedAndDepositedCid = head accsVerifiedAndDeposited
+        acc2VerifiedAndDepositedCid = head (tail accsVerifiedAndDeposited)
+        acc3VerifiedAndDepositedCid = head (tail (tail accsVerifiedAndDeposited))
+        acc4VerifiedAndDepositedCid = head (tail (tail (tail accsVerifiedAndDeposited)))
+ 
+    auctionBidCid <- submit auctioneer do
+        createCmd BidAuction with
+            auctioneer 
+            bidder = [firstBidder, secondBidder, thirdBidder, fourthBidder]
+            bids = []
+            itemName = "Apple Products Set"
+            itemDetails = "Contains Brand new iPhone 14 pro, iPad pro, Macbook pro, Airpods pro, Apple Watch Series 7"
+            reservePrice = Cash{value = 5000.0, currency = "USD"}
+            highestBid = Cash{value = 0.0, currency = "USD"}
+            highestBidder = None
+            endDate = date 2023 Dec 31
+            isActive = True
+
+    -- 4. bidder bids for the Auction contract
+    acc1Bid <- submit firstBidder do 
+        exerciseCmd auctionBidCid Bid with 
+            bidAmount = 1000.0
+            bidder = firstBidder
+            bidderId = accInfo1.bidderId 
+
+    acc2Bid <- submit secondBidder do
+        exerciseCmd acc1Bid Bid with 
+            bidAmount = 2000.0
+            bidder = secondBidder
+            bidderId = accInfo2.bidderId 
+
+    acc3Bid <- submit thirdBidder do
+        exerciseCmd acc2Bid Bid with 
+            bidAmount = 3000.0
+            bidder = thirdBidder
+            bidderId = accInfo3.bidderId 
+
+    acc4Bid <- submit fourthBidder do
+        exerciseCmd acc3Bid Bid with 
+            bidAmount = 4000.0
+            bidder = fourthBidder
+            bidderId = accInfo4.bidderId 
+ 
+
+    return (testParties, testBidders , testAuctionAccInfos, acc4Bid)
+
+testAuctionCloseOnReachingReservePrice : Script ()
+testAuctionCloseOnReachingReservePrice = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}, acc4Bid) <- testBidAuction
+
+    let
+        acc1BidCid = acc4Bid 
+
+    submit fourthBidder do
+        exerciseCmd acc1BidCid Bid with 
+            bidAmount = 5000.0
+            bidder = fourthBidder
+            bidderId = accInfo4.bidderId 
+    return ()
+     
+testCloseAuction : Script (TestParties, TestBidders, TestAuctionAccInfos , ContractId BidAuction )
+testCloseAuction = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}, acc4Bid) <- testBidAuction
+
+    let
+        acc1BidCid = acc4Bid 
+
+    -- 5. auctioneer closes the Auction contract
+    acc1Closed <- submit auctioneer do 
+        exerciseCmd acc1BidCid Cancel 
+    return (testParties, testBidders , testAuctionAccInfos, acc1Closed)
+ 
+testGetBids : Script ()
+testGetBids = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}, testBid ) <- testBidAuction
+ 
+    -- 6. auctioneer gets the bids for the Auction contract
+    acc1Bids <- submitMulti [auctioneer,firstBidder, secondBidder, thirdBidder, fourthBidder][] do 
+       exerciseCmd testBid GetBids
+    return ()
+
+filterLargeBids : [(Party, Numeric 2)] -> [(Party, Numeric 2)]
+filterLargeBids bids = filter (\(_, amount) -> amount > 1000.0) bids
+
+
+testGetLargeBids : Script ()
+testGetLargeBids = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}, testBid ) <- testBidAuction
+  
+    allBids <- query @BidAuction auctioneer -- Fetch all bids
+    let extracted = map (\x -> x._2 ) allBids
+
+    -- extract a field called bids from notes
+    let bids = map (\x -> x.bids ) extracted 
+
+    -- bids output is a list of list of tuples, so we need to flatten it
+    let bids1 = concat bids
+
+    -- now we have a list of tuples, 2nd element contains bids, we need to filter the large bids > 1500 
+    let largeBids = filter (\(_, amount) -> amount > 1500.0) bids1
+
+    -- sort in ascending order
+    let sortedBids = sortOn snd largeBids
+ 
+    debug $ "Large Bids greater than 1500 USD: " <> show largeBids
+    debug $ "Sorted Bids greater than 1500 USD: " <> show sortedBids
+    return ()
+
+
+{-
+    Unhappy paths
+    1. Bidder cannot bid for the Auction contract if the auction is closed
+    2. Bidder cannot bid for the Auction contract if the bid amount is less than the highest bid
+    3. Bidder cannot bid for the Auction contract if the bid amount is less than the reserve price
+-}
+cantBidForClosedAuction: Script()
+cantBidForClosedAuction = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}, acc1Closed) <- testCloseAuction
+    submitMustFail firstBidder do 
+        exerciseCmd acc1Closed Bid with -- auction is closed
+            bidAmount = 5000.0 
+            bidder = fourthBidder
+            bidderId = accInfo1.bidderId 
+
+    return ()
+
+cantBidMoreThanAmountInAuctionAcc: Script()
+cantBidMoreThanAmountInAuctionAcc = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}, acc4Bid) <- testBidAuction
+    submitMustFail firstBidder do 
+        exerciseCmd acc4Bid Bid with 
+            bidAmount = 6000.0 -- more than amount in auction account
+            bidder = fourthBidder
+            bidderId = accInfo1.bidderId 
+
+    return ()
+
+cantCreateBidAuctionWithZeroReservePrice: Script()
+cantCreateBidAuctionWithZeroReservePrice = script do
+    (testParties@TestParties{..}, testBidders@TestBidders{..}, testAuctionAccInfos@TestAuctionAccInfos{..}, accsVerified) <- testVerifyAuctionAcc
+
+    submitMustFail auctioneer do
+        createCmd BidAuction with
+            auctioneer 
+            bidder = [firstBidder, secondBidder, thirdBidder, fourthBidder]
+            bids = []
+            itemName = "Apple Products Set"
+            itemDetails = "Contains Brand new iPhone 14 pro, iPad pro, Macbook pro, Airpods pro, Apple Watch Series 7"
+            reservePrice = Cash{value = 0.0, currency = "USD"}
+            highestBid = Cash{value = 0.0, currency = "USD"}
+            highestBidder = None
+            endDate = date 2023 Dec 31
+            isActive = True
+
+    return ()
+
+  
+   
