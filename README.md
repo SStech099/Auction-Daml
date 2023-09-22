@@ -1,6 +1,6 @@
-# daml-capstone-auction-project
+# Capstone-auction-project
 
-This project is built on top of DAML SDK 2.6.4 using empty skeleton.
+This project is built on top of DAML SDK 2.6.5 using empty skeleton.
 
 # Auction Platform with DAML
 
@@ -22,7 +22,7 @@ To run this project locally, you'll need to have DAML SDK installed on your mach
 
 ### Cloning the Repository
 
-First, clone this repository to your local machine using the following command:
+First, clone this repository to your local machine
 
 ### Running the Tests
 
