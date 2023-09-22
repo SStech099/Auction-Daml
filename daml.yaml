@@ -4,9 +4,11 @@
 sdk-version: 2.6.5
 name: Auction-Daml
 source: daml
-init-script: Main:setup
+init-script: Setup:setupUsers
 version: 0.0.1
 dependencies:
   - daml-prim
   - daml-stdlib
   - daml-script
+exposed-modules:
+  - Main
